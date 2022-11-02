@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:complaint_user/complaint_details_page.dart';
 import 'package:complaint_user/models/complaint.dart';
 import 'package:complaint_user/models/user.dart';
@@ -7,6 +9,7 @@ import 'package:complaint_user/widgets/dialog_menu_button.dart';
 import 'package:complaint_user/widgets/extra_dialog.dart';
 import 'package:complaint_user/widgets/location_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ComplaintForm extends StatefulWidget {
   const ComplaintForm({Key? key}) : super(key: key);
@@ -16,13 +19,15 @@ class ComplaintForm extends StatefulWidget {
 }
 
 class _ComplaintFormState extends State<ComplaintForm> {
+  final ImagePicker _picker = ImagePicker();
   late Future<List<String>> categoriesFuture;
-  late Future<List<Map>> locationFuture;
   bool isLoading = false;
+
   TextEditingController titleController = TextEditingController();
   TextEditingController descriptionController = TextEditingController();
   Map? location;
   String? category;
+  List<XFile> images = [];
 
   String? titleError;
   String? descriptionError;
@@ -47,13 +52,6 @@ class _ComplaintFormState extends State<ComplaintForm> {
     throw Exception(errorMessage);
   }
 
-  Future<List<Map>> fetchLocation() async {
-    await Future.delayed(Duration(seconds: 2));
-    return [
-      {'label': 'Building', 'value': 'KICT', 'childLabel': ''}
-    ];
-  }
-
   bool validate() {
     titleError = descriptionError = null;
     if (titleController.text.isEmpty) titleError = 'required';
@@ -68,7 +66,7 @@ class _ComplaintFormState extends State<ComplaintForm> {
       Complaint complaint = Complaint(
         titleController.text,
         descriptionController.text,
-        {'Building': 'KICT', 'Block': 'Block B'},
+        location,
         category,
       );
       complaint.create('campus-1').then((String complaintId) {
@@ -97,10 +95,7 @@ class _ComplaintFormState extends State<ComplaintForm> {
                           children: [
                             Divider(height: 1),
                             ListTile(
-                              title: Text(
-                                e,
-                                textAlign: TextAlign.center,
-                              ),
+                              title: Text(e, textAlign: TextAlign.center),
                               onTap: () => Navigator.pop(context, e),
                             ),
                           ],
@@ -141,7 +136,14 @@ class _ComplaintFormState extends State<ComplaintForm> {
               ),
               SizedBox(height: 8),
               categorySelector(),
-              LocationSelector(),
+              LocationSelector(
+                onChanged: (val) {
+                  setState(() {
+                    location = val;
+                  });
+                  Debugger.log(val);
+                },
+              ),
               SizedBox(height: 8),
               TextField(
                 decoration: InputDecoration(labelText: 'Description', errorText: descriptionError),
@@ -149,8 +151,61 @@ class _ComplaintFormState extends State<ComplaintForm> {
                 controller: descriptionController,
               ),
               SizedBox(height: 16),
+              ...images
+                  .map((e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Stack(
+                          children: [
+                            Image.file(File(e.path)),
+                            Align(
+                              alignment: Alignment.topRight,
+                              child: IconButton(
+                                color: Colors.white,
+                                onPressed: () {
+                                  setState(() {
+                                    images.remove(e);
+                                  });
+                                },
+                                icon: Icon(Icons.cancel_rounded),
+                              ),
+                            ),
+                          ],
+                        ),
+                  ))
+                  .toList(),
               OutlinedButton.icon(
-                onPressed: () {},
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: Text('Please select'),
+                        content: Column(
+                          children: [
+                            ListTile(
+                              title: Text('Gallery'),
+                              onTap: () => Navigator.pop(context, 'gallery'),
+                            ),
+                            ListTile(
+                              title: Text('Camera'),
+                              onTap: () => Navigator.pop(context, 'camera'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ).then((value) {
+                    if (value != null) {
+                      _picker.pickImage(source: value == 'camera' ? ImageSource.camera : ImageSource.gallery).then((value) {
+                        if (value != null) {
+                          setState(() {
+                            images.add(value);
+                          });
+                        }
+                      });
+                    }
+                  });
+                },
                 icon: Icon(Icons.add_photo_alternate_rounded),
                 label: Text('Add photo'),
               )
